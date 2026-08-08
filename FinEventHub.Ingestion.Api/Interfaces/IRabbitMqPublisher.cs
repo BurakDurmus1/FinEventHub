@@ -4,5 +4,7 @@ namespace FinEventHub.Ingestion.Api.Interfaces;
 
 public interface IRabbitMqPublisher
 {
-    Task PublishAsync(EventMessage message, CancellationToken cancellationToken = default);
+    Task PublishAsync(
+        EventMessage message,
+        CancellationToken cancellationToken = default);
 }

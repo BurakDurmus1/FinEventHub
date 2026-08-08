@@ -18,7 +18,9 @@ public sealed class IngestionService : IIngestionService
     {
         foreach (var item in request.Events)
         {
-            await _publisher.PublishAsync(item, cancellationToken);
+            await _publisher.PublishAsync(
+                item,
+                cancellationToken);
         }
 
         return request.Events.Count;
