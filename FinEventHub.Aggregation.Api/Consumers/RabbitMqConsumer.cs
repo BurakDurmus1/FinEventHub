@@ -114,23 +114,55 @@ public sealed class RabbitMqConsumer : BackgroundService
 
         await Task.Delay(Timeout.Infinite, stoppingToken);
     }
-  
+
     private async Task OnMessageReceived(object sender, BasicDeliverEventArgs args)
     {
+        const string RetryCountHeader = "x-retry-count";
+
+        var retryCount = 0;
+
+        if (args.BasicProperties.Headers is not null &&
+            args.BasicProperties.Headers.TryGetValue(RetryCountHeader, out var value))
+        {
+            if (value is byte[] bytes &&
+                int.TryParse(Encoding.UTF8.GetString(bytes), out var parsed))
+            {
+                retryCount = parsed;
+            }
+        }
+
         try
         {
             var json = Encoding.UTF8.GetString(args.Body.ToArray());
 
-            var message = JsonSerializer.Deserialize<EventMessage>(json);
+            EventMessage? message;
+
+            try
+            {
+                message = JsonSerializer.Deserialize<EventMessage>(json);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogError(ex,
+                    "Failed to deserialize RabbitMQ message.");
+
+                await MoveToDeadLetterAsync(args);
+
+                return;
+            }
 
             if (message is null)
             {
-                await _channel!.BasicNackAsync(args.DeliveryTag, false, true);
+                _logger.LogWarning(
+                    "Received null message after deserialization.");
+
+                await MoveToDeadLetterAsync(args);
+
                 return;
             }
 
             _logger.LogInformation(
-                "Received Event {EventId}",
+                "Processing Event {EventId}",
                 message.EventId);
 
             using var scope = _scopeFactory.CreateScope();
@@ -140,13 +172,49 @@ public sealed class RabbitMqConsumer : BackgroundService
 
             await processor.ProcessAsync(message);
 
-            await _channel.BasicAckAsync(args.DeliveryTag, false);
+            await _channel!.BasicAckAsync(args.DeliveryTag, false);
+
+            _logger.LogInformation(
+                "Event {EventId} processed successfully.",
+                message.EventId);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Consumer Error");
+            _logger.LogError(
+                ex,
+                "Error while processing RabbitMQ message. Retry={RetryCount}",
+                retryCount);
 
-            await _channel!.BasicNackAsync(args.DeliveryTag, false, true);
+            if (retryCount >= _options.MaxRetryCount)
+            {
+                _logger.LogWarning(
+                    "Retry limit reached. Moving message to DLQ.");
+
+                await MoveToDeadLetterAsync(args);
+
+                return;
+            }
+
+            var properties = new BasicProperties
+            {
+                Persistent = true,
+                Headers = CreateRetryHeaders(
+                    args.BasicProperties.Headers,
+                    retryCount)
+            };
+
+            await _channel!.BasicPublishAsync(
+                exchange: string.Empty,
+                routingKey: _options.RetryQueueName,
+                mandatory: true,
+                basicProperties: properties,
+                body: args.Body);
+
+            await _channel.BasicAckAsync(args.DeliveryTag, false);
+
+            _logger.LogInformation(
+                "Message sent to Retry Queue. Retry={RetryCount}",
+                retryCount + 1);
         }
     }
 
@@ -159,5 +227,41 @@ public sealed class RabbitMqConsumer : BackgroundService
             await _connection.DisposeAsync();
 
         await base.StopAsync(cancellationToken);
+    }
+    private static IDictionary<string, object?> CreateRetryHeaders(
+    IDictionary<string, object?>? existingHeaders,
+    int retryCount)
+    {
+        var headers = existingHeaders is null
+            ? new Dictionary<string, object?>()
+            : new Dictionary<string, object?>(existingHeaders);
+
+        headers["x-retry-count"] =
+            Encoding.UTF8.GetBytes((retryCount + 1).ToString());
+
+        return headers;
+    }
+    private async Task MoveToDeadLetterAsync(BasicDeliverEventArgs args)
+    {
+        _logger.LogWarning("Moving message to Dead Letter Queue.");
+
+        var properties = new BasicProperties
+        {
+            Persistent = true,
+            Headers = args.BasicProperties.Headers
+        };
+
+        await _channel!.BasicPublishAsync(
+            exchange: string.Empty,
+            routingKey: _options.DeadLetterQueueName,
+            mandatory: true,
+            basicProperties: properties,
+            body: args.Body);
+
+        _logger.LogInformation("Message published to Dead Letter Queue.");
+
+        await _channel.BasicAckAsync(args.DeliveryTag, false);
+
+        _logger.LogInformation("Original message acknowledged.");
     }
 }
