@@ -28,6 +28,11 @@ builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen();
 builder.Services.AddHostedService<RabbitMqConsumer>();
+builder.Services
+    .AddHealthChecks()
+    .AddDbContextCheck<AppDbContext>();
+
+
 
 var app = builder.Build();
 

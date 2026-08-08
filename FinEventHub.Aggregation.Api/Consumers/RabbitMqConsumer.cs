@@ -100,15 +100,18 @@ public sealed class RabbitMqConsumer : BackgroundService
             _options.DeadLetterQueueName,
             cancellationToken: stoppingToken);
 
-        var consumer = new AsyncEventingBasicConsumer(_channel);
+        for (var i = 0; i < _options.ConsumerConcurrency; i++)
+        {
+            var consumer = new AsyncEventingBasicConsumer(_channel);
 
-        consumer.ReceivedAsync += OnMessageReceived;
+            consumer.ReceivedAsync += OnMessageReceived;
 
-        await _channel.BasicConsumeAsync(
-            queue: _options.QueueName,
-            autoAck: false,
-            consumer: consumer,
-            cancellationToken: stoppingToken);
+            await _channel.BasicConsumeAsync(
+                queue: _options.QueueName,
+                autoAck: false,
+                consumer: consumer,
+                cancellationToken: stoppingToken);
+        }
 
         _logger.LogInformation("RabbitMQ Consumer started.");
 
@@ -162,8 +165,9 @@ public sealed class RabbitMqConsumer : BackgroundService
             }
 
             _logger.LogInformation(
-                "Processing Event {EventId}",
-                message.EventId);
+     "Processing Event. EventId={EventId}, CustomerId={CustomerId}",
+     message.EventId,
+     message.CustomerId);
 
             using var scope = _scopeFactory.CreateScope();
 
@@ -175,8 +179,9 @@ public sealed class RabbitMqConsumer : BackgroundService
             await _channel!.BasicAckAsync(args.DeliveryTag, false);
 
             _logger.LogInformation(
-                "Event {EventId} processed successfully.",
-                message.EventId);
+    "Processing Event. EventId={EventId}, CustomerId={CustomerId}",
+    message.EventId,
+    message.CustomerId);
         }
         catch (Exception ex)
         {
@@ -213,8 +218,8 @@ public sealed class RabbitMqConsumer : BackgroundService
             await _channel.BasicAckAsync(args.DeliveryTag, false);
 
             _logger.LogInformation(
-                "Message sent to Retry Queue. Retry={RetryCount}",
-                retryCount + 1);
+     "Message sent to Retry Queue. Retry={RetryCount}",
+     retryCount + 1);
         }
     }
 

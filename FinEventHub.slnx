@@ -6,5 +6,9 @@
     <Project Path="FinEventHub.Aggregation.Api/FinEventHub.Aggregation.Api.csproj" />
     <Project Path="FinEventHub.Contracts/FinEventHub.Contracts.csproj" />
     <Project Path="FinEventHub.Ingestion.Api/FinEventHub.Ingestion.Api.csproj" />
+    <Project Path="FinEventHub.LoadGenerator/FinEventHub.LoadGenerator.csproj" />
+  </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="FinEventHub.Tests/FinEventHub.Tests.csproj" />
   </Folder>
 </Solution>
