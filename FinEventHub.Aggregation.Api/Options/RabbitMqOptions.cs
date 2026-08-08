@@ -10,4 +10,11 @@ public sealed class RabbitMqOptions
     public string Password { get; set; } = default!;
 
     public string QueueName { get; set; } = default!;
+    public string RetryQueueName { get; set; } = default!;
+
+    public string DeadLetterQueueName { get; set; } = default!;
+
+    public int RetryDelayMilliseconds { get; set; }
+
+    public int MaxRetryCount { get; set; }
 }

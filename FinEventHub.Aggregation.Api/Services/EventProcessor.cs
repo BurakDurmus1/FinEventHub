@@ -20,6 +20,7 @@ public sealed class EventProcessor : IEventProcessor
         EventMessage message,
         CancellationToken cancellationToken = default)
     {
+        //throw new Exception("Retry test");
         await using var transaction =
             await _db.Database.BeginTransactionAsync(cancellationToken);
 

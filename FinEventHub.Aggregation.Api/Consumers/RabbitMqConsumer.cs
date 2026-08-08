@@ -44,11 +44,60 @@ public sealed class RabbitMqConsumer : BackgroundService
 
         _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
 
+        const string exchangeName = "events.exchange";
+
+        await _channel.ExchangeDeclareAsync(
+            exchange: exchangeName,
+            type: ExchangeType.Direct,
+            durable: true,
+            cancellationToken: stoppingToken);
+
+        // Main Queue
         await _channel.QueueDeclareAsync(
             queue: _options.QueueName,
             durable: true,
             exclusive: false,
             autoDelete: false,
+            cancellationToken: stoppingToken);
+
+        // Retry Queue
+        await _channel.QueueDeclareAsync(
+            queue: _options.RetryQueueName,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            arguments: new Dictionary<string, object?>
+            {
+                ["x-message-ttl"] = _options.RetryDelayMilliseconds,
+                ["x-dead-letter-exchange"] = exchangeName,
+                ["x-dead-letter-routing-key"] = _options.QueueName
+            },
+            cancellationToken: stoppingToken);
+
+        // Dead Letter Queue
+        await _channel.QueueDeclareAsync(
+            queue: _options.DeadLetterQueueName,
+            durable: true,
+            exclusive: false,
+            autoDelete: false,
+            cancellationToken: stoppingToken);
+
+        await _channel.QueueBindAsync(
+            _options.QueueName,
+            exchangeName,
+            _options.QueueName,
+            cancellationToken: stoppingToken);
+
+        await _channel.QueueBindAsync(
+            _options.RetryQueueName,
+            exchangeName,
+            _options.RetryQueueName,
+            cancellationToken: stoppingToken);
+
+        await _channel.QueueBindAsync(
+            _options.DeadLetterQueueName,
+            exchangeName,
+            _options.DeadLetterQueueName,
             cancellationToken: stoppingToken);
 
         var consumer = new AsyncEventingBasicConsumer(_channel);
@@ -65,7 +114,7 @@ public sealed class RabbitMqConsumer : BackgroundService
 
         await Task.Delay(Timeout.Infinite, stoppingToken);
     }
-
+  
     private async Task OnMessageReceived(object sender, BasicDeliverEventArgs args)
     {
         try
@@ -76,7 +125,7 @@ public sealed class RabbitMqConsumer : BackgroundService
 
             if (message is null)
             {
-                await _channel!.BasicNackAsync(args.DeliveryTag, false, false);
+                await _channel!.BasicNackAsync(args.DeliveryTag, false, true);
                 return;
             }
 
