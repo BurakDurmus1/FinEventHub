@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path="docker-compose.yml" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="FinEventHub.Aggregation.Api/FinEventHub.Aggregation.Api.csproj" />
+    <Project Path="FinEventHub.Contracts/FinEventHub.Contracts.csproj" />
+    <Project Path="FinEventHub.Ingestion.Api/FinEventHub.Ingestion.Api.csproj" />
+  </Folder>
+</Solution>

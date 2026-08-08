@@ -1,0 +1,26 @@
+services:
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: fineventhub-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  postgres:
+    image: postgres:17
+    container_name: fineventhub-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: FinEventHubDb
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  rabbitmq_data:
+  postgres_data:

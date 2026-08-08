@@ -1,0 +1,6 @@
+@FinEventHub_HostAddress = http://localhost:5215
+
+GET {{FinEventHub_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
